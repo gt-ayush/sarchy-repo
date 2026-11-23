@@ -98,7 +98,3 @@ sudo pacman -Syu
 ```
 
 > Replace `<YOUR_FINGERPRINT>` with your actual 40-character GPG fingerprint.
-
-## License
-
-MIT
