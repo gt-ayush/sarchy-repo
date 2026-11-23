@@ -1,0 +1,16 @@
+# Maintainer: gt-ayush <gt-ayush@outlook.com>
+pkgname=sarchy-keyring
+pkgver=20261123
+pkgrel=1
+pkgdesc="Sarchy Linux GPG keyring and trusted keys"
+arch=('any')
+url="https://github.com/gt-ayush/sarchy-repo"
+license=('GPL')
+source=("sarchy.gpg" "sarchy-trusted")
+sha256sums=('SKIP' 'SKIP')
+
+package() {
+    install -dm755 "${pkgdir}/usr/share/pacman/keyrings/"
+    install -m644 "${srcdir}/sarchy.gpg"     "${pkgdir}/usr/share/pacman/keyrings/sarchy.gpg"
+    install -m644 "${srcdir}/sarchy-trusted" "${pkgdir}/usr/share/pacman/keyrings/sarchy-trusted"
+}

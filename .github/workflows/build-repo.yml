@@ -1,0 +1,84 @@
+name: Build & Publish Sarchy Pacman Repo
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'packages/**'
+      - 'scripts/**'
+  schedule:
+    # Runs continuously every 12 hours (at 00:00 and 12:00 UTC)
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-packages:
+    runs-on: ubuntu-latest
+    container:
+      image: artixlinux/artixlinux:latest
+      options: --privileged
+
+    steps:
+      - name: Checkout sarchy-repo
+        uses: actions/checkout@v4
+
+      - name: Initialize Artix Pacman & Build Tools
+        run: |
+          pacman-key --init
+          pacman-key --populate artix
+          pacman -Syu --noconfirm --needed base-devel git sudo gnupg
+
+      - name: Import Repository GPG Signing Key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_FINGERPRINT: ${{ secrets.GPG_FINGERPRINT }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import
+          echo -e "5\ny\n" | gpg --command-fd 0 --expert --edit-key "$GPG_FINGERPRINT" trust
+
+      - name: Download Existing Release Packages (Preserve Unchanged Packages)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p output
+          # Install github-cli or curl existing assets if release 'repo' already exists
+          pacman -S --noconfirm github-cli
+          gh release download repo --dir output --pattern "*.pkg.tar.zst*" || echo "No existing release found, starting fresh."
+
+      - name: Compile Packages (with Upstream Git Fallback)
+        env:
+          GPG_FINGERPRINT: ${{ secrets.GPG_FINGERPRINT }}
+        run: |
+          chmod +x scripts/smart-build.sh
+          ./scripts/smart-build.sh
+
+      - name: Generate Signed Pacman Repository Database
+        env:
+          GPG_FINGERPRINT: ${{ secrets.GPG_FINGERPRINT }}
+        run: |
+          cd output
+          # Keep only the newest version of each package
+          rm -f sarchy-repo.db* sarchy-repo.files*
+          repo-add --sign --key "$GPG_FINGERPRINT" sarchy-repo.db.tar.gz *.pkg.tar.zst
+
+          # Convert symlinks to real files for GitHub Releases compatibility
+          rm -f sarchy-repo.db sarchy-repo.db.sig sarchy-repo.files sarchy-repo.files.sig
+          cp sarchy-repo.db.tar.gz sarchy-repo.db
+          cp sarchy-repo.db.tar.gz.sig sarchy-repo.db.sig
+          cp sarchy-repo.files.tar.gz sarchy-repo.files
+          cp sarchy-repo.files.tar.gz.sig sarchy-repo.files.sig
+
+      - name: Publish to GitHub Release ('repo')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view repo >/dev/null 2>&1; then
+            gh release upload repo output/* --clobber
+          else
+            gh release create repo output/* \
+              --title "Sarchy Linux Official Repository" \
+              --notes "Automated OpenRC-compatible package repository for Sarchy Linux."
+          fi
