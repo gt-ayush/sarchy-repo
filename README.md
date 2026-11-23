@@ -15,6 +15,7 @@ sarchy-repo/
 │       ├── PKGBUILD              # Builds the GPG keyring package
 │       ├── sarchy.gpg            # Exported public key (ASCII-armored)
 │       └── sarchy-trusted        # Ownertrust record (FPR:4:)
+├── external.repos                # One standalone Git repo URL per line (e.g. sarchy-branding)
 ├── scripts/
 │   └── smart-build.sh            # Build script with upstream Git fallback
 └── README.md
@@ -47,9 +48,15 @@ The pipeline runs on:
 
 ## Adding a New Package
 
+**Option A — Keep PKGBUILD inside this repo:**
 1. Create `packages/<tool-name>/`.
 2. Add a `PKGBUILD` (remove `systemd` from `depends` for Artix/OpenRC compatibility).
 3. (Optional) Add `upstream.url` with a raw Git clone URL for the fallback builder.
+
+**Option B — Build from a standalone repo (e.g. `sarchy-branding`):**
+1. Add the standalone Git repo URL to `external.repos` (one URL per line).
+2. Develop and maintain the PKGBUILD in its own repo — `sarchy-repo` will clone, compile, sign, and publish it automatically.
+
 4. `git push origin main` — GitHub Actions compiles, signs, updates the repo database, and publishes automatically.
 
 Example `packages/sometool/PKGBUILD`:

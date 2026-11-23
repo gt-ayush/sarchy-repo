@@ -77,3 +77,25 @@ for pkg_dir in "$REPO_ROOT"/packages/*; do
         echo "[FAILED] Both standard and Git fallback builds failed for $pkg_name."
     fi
 done
+
+# Build external standalone repos listed in external.repos (one git URL per line)
+if [ -f "$REPO_ROOT/external.repos" ]; then
+    while IFS= read -r repo_url; do
+        [ -z "$repo_url" ] && continue
+        pkg_name="$(basename "$repo_url" .git)"
+        echo "=========================================="
+        echo "Building external package: $pkg_name"
+        echo "=========================================="
+        tmp_dir="/tmp/external-$pkg_name"
+        rm -rf "$tmp_dir"
+        sudo -u builder git clone --depth 1 "$repo_url" "$tmp_dir"
+        cd "$tmp_dir"
+        if sudo -u builder makepkg -s --sign --key "$GPG_FINGERPRINT" --noconfirm; then
+            echo "[SUCCESS] Built external $pkg_name"
+            mv ./*.pkg.tar.zst* "$OUT_DIR/"
+        else
+            echo "[FAILED] External build failed for $pkg_name"
+        fi
+        cd "$REPO_ROOT"
+    done < "$REPO_ROOT/external.repos"
+fi
