@@ -45,13 +45,13 @@ jobs:
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
 
-          # Import GPG key into root (for repo-add --sign)
+          # Import GPG key & set ultimate trust for root (for repo-add --sign)
           echo "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import
-          echo -e "5\ny\n" | gpg --command-fd 0 --expert --edit-key "$GPG_FINGERPRINT" trust
+          echo "${GPG_FINGERPRINT}:6:" | gpg --batch --import-ownertrust
 
-          # Import GPG key into builder (for makepkg --sign)
-          echo "$GPG_PRIVATE_KEY" | base64 -d | sudo -u builder gpg --batch --import
-          echo -e "5\ny\n" | sudo -u builder gpg --command-fd 0 --expert --edit-key "$GPG_FINGERPRINT" trust
+          # Import GPG key & set ultimate trust for builder (for makepkg --sign)
+          echo "$GPG_PRIVATE_KEY" | base64 -d | sudo -H -u builder gpg --batch --import
+          echo "${GPG_FINGERPRINT}:6:" | sudo -H -u builder gpg --batch --import-ownertrust
 
       - name: Download Existing Release Packages (Preserve Unchanged Packages)
         env:
