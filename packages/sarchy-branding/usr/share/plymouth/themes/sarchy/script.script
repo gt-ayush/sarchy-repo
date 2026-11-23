@@ -1,0 +1,8 @@
+if (Plymouth.State === "Boot")
+    background_image = new Image();
+    background_image.file = "/usr/share/backgrounds/sarchy/sarchy-wallpaper.png";
+    background_image.position = 0;
+    background_image.opacity = 1.0;
+
+    scale_to_screen(background_image);
+end

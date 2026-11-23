@@ -89,9 +89,9 @@ sudo pacman-key --populate sarchy
 sudo pacman-key --lsign <YOUR_FINGERPRINT>
 
 # 4. Add the repository to /etc/pacman.conf
-# [sarchy]
-# SigLevel = Required
-# Server = https://github.com/gt-ayush/sarchy-repo/releases/download/repo/
+# [sarchy-repo]
+# SigLevel = Required DatabaseOptional
+# Server = https://github.com/gt-ayush/sarchy-repo/releases/download/repo
 
 # 5. Sync and install
 sudo pacman -Syu

@@ -1,0 +1,7 @@
+[Plymouth Theme]
+Name=Sarchy
+Description=Sarchy boot splash theme
+ModuleName=script
+
+[sarchy]
+ThemeDir=/usr/share/plymouth/themes/sarchy

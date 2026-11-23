@@ -1,0 +1,13 @@
+post_install() {
+    if command -v grub-mkconfig >/dev/null 2>&1; then
+        grub-mkconfig -o /boot/grub/grub.cfg 2>/dev/null || true
+    fi
+    if command -v plymouth-set-default-theme >/dev/null 2>&1; then
+        plymouth-set-default-theme -R sarchy 2>/dev/null || true
+    fi
+    echo "Sarchy branding installed. Select the 'sarchy' theme in your display manager / Plymouth / GRUB settings."
+}
+
+post_upgrade() {
+    post_install
+}

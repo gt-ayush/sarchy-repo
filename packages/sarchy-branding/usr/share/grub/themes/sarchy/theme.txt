@@ -1,0 +1,30 @@
+# Sarchy GRUB theme
+# Set GRUB_THEME="/usr/share/grub/themes/sarchy/theme.txt" in /etc/default/grub,
+# then run: sudo grub-mkconfig -o /boot/grub/grub.cfg
+
+title-text: "Sarchy"
+title-font: "DejaVu Sans Bold 24"
+title-color: "#ffffff"
+
+message-font: "DejaVu Sans 16"
+message-color: "#ffffff"
+
++ boot_menu {
+    left = 10%
+    top = 40%
+    width = 40%
+    height = 40%
+    item-font = "DejaVu Sans 18"
+    item-color = "#ffffff"
+    selected-item-color = "#7aa2f7"
+    selected-item-pixel-height = 2
+    item-spacing = 8
+}
+
++ label {
+    left = 10%
+    top = 90%
+    text = "Arch based  ·  keep it simple"
+    font = "DejaVu Sans 14"
+    color = "#8aa0c8"
+}
