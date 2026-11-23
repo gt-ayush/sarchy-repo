@@ -6,8 +6,8 @@ on:
     paths:
       - 'packages/**'
       - 'scripts/**'
+      - '.github/workflows/build-repo.yml'
   schedule:
-    # Runs continuously every 12 hours (at 00:00 and 12:00 UTC)
     - cron: '0 */12 * * *'
   workflow_dispatch:
 
@@ -18,39 +18,46 @@ jobs:
   build-packages:
     runs-on: ubuntu-latest
     container:
-      image: artixlinux/artixlinux:latest
+      image: artixlinux/artixlinux:base-devel
       options: --privileged
 
     steps:
-      - name: Checkout sarchy-repo
-        uses: actions/checkout@v4
-
-      - name: Set Git Identity
-        run: |
-          git config user.name "gt-ayush"
-          git config user.email "gt-ayush@outlook.com"
-
-      - name: Initialize Artix Pacman & Build Tools
+      - name: Initialize Artix Pacman & Install Core Tools
         run: |
           pacman-key --init
           pacman-key --populate artix
-          pacman -Syu --noconfirm --needed base-devel git sudo gnupg
+          pacman -Syu --noconfirm --needed base-devel git sudo gnupg tar zstd github-cli
 
-      - name: Import Repository GPG Signing Key
+      - name: Checkout sarchy-repo
+        uses: actions/checkout@v4
+
+      - name: Set Git Identity & Safe Directory
+        run: |
+          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
+          git config --global user.name "gt-ayush"
+          git config --global user.email "gt-ayush@outlook.com"
+
+      - name: Create Builder User & Import GPG Key for Both Root and Builder
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_FINGERPRINT: ${{ secrets.GPG_FINGERPRINT }}
         run: |
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
+
+          # Import GPG key into root (for repo-add --sign)
           echo "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import
           echo -e "5\ny\n" | gpg --command-fd 0 --expert --edit-key "$GPG_FINGERPRINT" trust
+
+          # Import GPG key into builder (for makepkg --sign)
+          echo "$GPG_PRIVATE_KEY" | base64 -d | sudo -u builder gpg --batch --import
+          echo -e "5\ny\n" | sudo -u builder gpg --command-fd 0 --expert --edit-key "$GPG_FINGERPRINT" trust
 
       - name: Download Existing Release Packages (Preserve Unchanged Packages)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p output
-          # Install github-cli or curl existing assets if release 'repo' already exists
-          pacman -S --noconfirm github-cli
           gh release download repo --dir output --pattern "*.pkg.tar.zst*" || echo "No existing release found, starting fresh."
 
       - name: Compile Packages (with Upstream Git Fallback)
@@ -65,7 +72,8 @@ jobs:
           GPG_FINGERPRINT: ${{ secrets.GPG_FINGERPRINT }}
         run: |
           cd output
-          # Keep only the newest version of each package
+          # Verify at least one package exists before running repo-add
+          ls -la *.pkg.tar.zst
           rm -f sarchy-repo.db* sarchy-repo.files*
           repo-add --sign --key "$GPG_FINGERPRINT" sarchy-repo.db.tar.gz *.pkg.tar.zst
 
