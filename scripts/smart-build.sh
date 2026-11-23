@@ -5,6 +5,19 @@ REPO_ROOT="$(pwd)"
 OUT_DIR="$REPO_ROOT/output"
 mkdir -p "$OUT_DIR"
 
+# Auto-detect GPG fingerprint if not provided (for local use; CI sets it via secret)
+if [ -z "${GPG_FINGERPRINT:-}" ]; then
+    GPG_FINGERPRINT="$(gpg --list-secret-keys --with-colons 2>/dev/null | awk -F: '/^fpr:/ {print $10; exit}')"
+    export GPG_FINGERPRINT
+fi
+
+if [ -z "$GPG_FINGERPRINT" ]; then
+    echo "[ERROR] GPG_FINGERPRINT is not set."
+    echo "  Export it manually: export GPG_FINGERPRINT=<your-40-char-fingerprint>"
+    echo "  Or list your keys: gpg --list-secret-keys --with-colons"
+    exit 1
+fi
+
 # Create a non-root builder user (makepkg refuses to run as root)
 if ! id -u builder >/dev/null 2>&1; then
     useradd -m builder
