@@ -18,13 +18,36 @@ if [ -z "$GPG_FINGERPRINT" ]; then
     exit 1
 fi
 
-# Create a non-root builder user (makepkg refuses to run as root)
-if ! id -u builder >/dev/null 2>&1; then
-    useradd -m builder
-    echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+# Determine sudo prefix: root (CI container) uses builder user; local (non-root) runs as current user
+if [ "$(id -u)" = "0" ]; then
+    # Running as root inside CI container — makepkg refuses to run as root
+    if ! id -u builder >/dev/null 2>&1; then
+        useradd -m builder
+        echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+    fi
+    # Only chown the directories we actually write to (not .git/)
+    chown -R builder:builder "$REPO_ROOT/packages" "$REPO_ROOT/output" 2>/dev/null || true
+    SUDO="sudo -u builder"
+else
+    # Running locally as non-root user — makepkg works fine as non-root
+    SUDO=""
 fi
 
-chown -R builder:builder "$REPO_ROOT"
+run_makepkg() {
+    $SUDO makepkg "$@"
+}
+
+run_git_clone() {
+    $SUDO git clone "$@"
+}
+
+run_sed() {
+    $SUDO sed "$@"
+}
+
+run_rm() {
+    $SUDO rm -rf "$@"
+}
 
 for pkg_dir in "$REPO_ROOT"/packages/*; do
     [ -d "$pkg_dir" ] || continue
@@ -36,14 +59,14 @@ for pkg_dir in "$REPO_ROOT"/packages/*; do
     cd "$pkg_dir"
 
     # Attempt 1: Standard PKGBUILD build
-    if sudo -u builder makepkg -s --sign --key "$GPG_FINGERPRINT" --noconfirm; then
+    if run_makepkg -s --sign --key "$GPG_FINGERPRINT" --noconfirm; then
         echo "[SUCCESS] Built $pkg_name via standard PKGBUILD"
         mv ./*.pkg.tar.zst* "$OUT_DIR/"
         continue
     fi
 
     echo "[WARNING] Standard build failed for $pkg_name. Attempting upstream Git fallback..."
-    sudo -u builder rm -rf src pkg ./*.tar.* ./*.zip
+    run_rm src pkg ./*.tar.* ./*.zip
 
     # Attempt 2: Upstream Git source fallback
     UPSTREAM_GIT=""
@@ -65,12 +88,12 @@ for pkg_dir in "$REPO_ROOT"/packages/*; do
     echo "[FALLBACK] Cloning from $UPSTREAM_GIT..."
     FALLBACK_DIR="/tmp/fallback-$pkg_name"
     rm -rf "$FALLBACK_DIR"
-    sudo -u builder git clone --depth 1 "$UPSTREAM_GIT" "$FALLBACK_DIR"
+    run_git_clone --depth 1 "$UPSTREAM_GIT" "$FALLBACK_DIR"
 
     # Auto-strip systemd dependencies from PKGBUILD and skip checksums for live git fallback
-    sudo -u builder sed -i "s/'systemd'//g; s/\"systemd\"//g; s/'libsystemd'//g; s/\"libsystemd\"//g" PKGBUILD
+    run_sed -i "s/'systemd'//g; s/\"systemd\"//g; s/'libsystemd'//g; s/\"libsystemd\"//g" PKGBUILD
 
-    if sudo -u builder makepkg -s --skipinteg --sign --key "$GPG_FINGERPRINT" --noconfirm; then
+    if run_makepkg -s --skipinteg --sign --key "$GPG_FINGERPRINT" --noconfirm; then
         echo "[SUCCESS] Built $pkg_name via upstream Git fallback!"
         mv ./*.pkg.tar.zst* "$OUT_DIR/"
     else
@@ -88,9 +111,9 @@ if [ -f "$REPO_ROOT/external.repos" ]; then
         echo "=========================================="
         tmp_dir="/tmp/external-$pkg_name"
         rm -rf "$tmp_dir"
-        sudo -u builder git clone --depth 1 "$repo_url" "$tmp_dir"
+        run_git_clone --depth 1 "$repo_url" "$tmp_dir"
         cd "$tmp_dir"
-        if sudo -u builder makepkg -s --sign --key "$GPG_FINGERPRINT" --noconfirm; then
+        if run_makepkg -s --sign --key "$GPG_FINGERPRINT" --noconfirm; then
             echo "[SUCCESS] Built external $pkg_name"
             mv ./*.pkg.tar.zst* "$OUT_DIR/"
         else

@@ -1,1 +1,6 @@
+graphify-out/output/
+packages/*/pkg/
+packages/*/src/
+packages/*/*.tar.*
+output/
 graphify-out/
