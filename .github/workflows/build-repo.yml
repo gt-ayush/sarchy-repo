@@ -82,13 +82,20 @@ jobs:
         run: |
           cd output
           ls -la *.pkg.tar.zst
+
+          # Keep only the latest version of each package (prune old versions downloaded from release)
+          for pkg in $(ls -1 *.pkg.tar.zst | sed -E 's/-[^-]+-[^-]+-(any|x86_64)\.pkg\.tar\.zst$//' | sort -u); do
+            ls -1v "${pkg}"-*.pkg.tar.zst | head -n -1 | xargs -r -I{} rm -f "{}" "{}.sig"
+          done
+
           rm -f sarchy-repo.db* sarchy-repo.files* sarchy.gpg
           repo-add --sign --key "$GPG_FINGERPRINT" sarchy-repo.db.tar.gz *.pkg.tar.zst
 
           # Export public key so ISO builds or users can fetch it directly
           gpg --armor --export "$GPG_FINGERPRINT" > sarchy.gpg
 
-          # Convert symlinks to real files for GitHub Releases compatibility
+          # Remove symlinks created by repo-add before copying to real files for GitHub Releases
+          rm -f sarchy-repo.db sarchy-repo.db.sig sarchy-repo.files sarchy-repo.files.sig
           cp sarchy-repo.db.tar.gz sarchy-repo.db
           cp sarchy-repo.db.tar.gz.sig sarchy-repo.db.sig
           cp sarchy-repo.files.tar.gz sarchy-repo.files
