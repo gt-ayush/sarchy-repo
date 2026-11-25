@@ -103,5 +103,5 @@ jobs:
           else
             gh release create repo output/* \
               --title "Sarchy Linux Official Repository" \
-              --notes "Automated Runit-compatible package repository for Sarchy Linux."
+              --notes "Automated multi-init (runit, OpenRC, dinit, s6) package repository for Sarchy Linux."
           fi
