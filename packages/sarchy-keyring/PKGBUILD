@@ -1,11 +1,12 @@
 # Maintainer: gt-ayush <gt-ayush@outlook.com>
 pkgname=sarchy-keyring
 pkgver=20261123
-pkgrel=1
+pkgrel=2
 pkgdesc="Sarchy Linux GPG keyring and trusted keys"
 arch=('any')
 url="https://github.com/gt-ayush/sarchy-repo"
 license=('GPL')
+install=sarchy-keyring.install
 source=("sarchy.gpg" "sarchy-trusted")
 sha256sums=('SKIP' 'SKIP')
 
