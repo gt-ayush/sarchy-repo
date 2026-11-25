@@ -4,3 +4,4 @@ packages/*/src/
 packages/*/*.tar.*
 output/
 graphify-out/
+concepts_brief.md
