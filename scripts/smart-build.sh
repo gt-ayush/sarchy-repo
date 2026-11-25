@@ -1,11 +1,57 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+###############################################################################
+# smart-build.sh — Build every package in packages/ plus external.repos repos
+#
+# Local (non-container) usage:
+#   export GPG_FINGERPRINT=<your-40-char-fingerprint>
+#   ./scripts/smart-build.sh
+#
+# Docker / Podman local usage (matches GitHub Actions CI exactly):
+#   export GPG_FINGERPRINT=<your-40-char-fingerprint>
+#   USE_CONTAINER=1 ./scripts/smart-build.sh
+#
+# The script re-execs itself inside artixlinux/artixlinux:latest so your local
+# build matches CI (same base-devel, same GPG signing, same shallow clones).
+###############################################################################
+
 REPO_ROOT="$(pwd)"
 OUT_DIR="$REPO_ROOT/output"
+GIT_CLONE_DEPTH=1          # Only clone the latest commit — faster, smaller download
+
 mkdir -p "$OUT_DIR"
 
+# ---------------------------------------------------------------------------
+# Container support: re-exec inside docker or podman if USE_CONTAINER=1
+# ---------------------------------------------------------------------------
+if [ "${USE_CONTAINER:-0}" = "1" ]; then
+    CONTAINER_RUNTIME=""
+    if command -v podman >/dev/null 2>&1; then
+        CONTAINER_RUNTIME="podman"
+    elif command -v docker >/dev/null 2>&1; then
+        CONTAINER_RUNTIME="docker"
+    else
+        echo "[ERROR] USE_CONTAINER=1 but neither podman nor docker is installed."
+        exit 1
+    fi
+
+    echo "[CONTAINER] Re-executing inside artixlinux/artixlinux:latest via $CONTAINER_RUNTIME"
+
+    $CONTAINER_RUNTIME run --rm --privileged \
+        -e GPG_FINGERPRINT="$GPG_FINGERPRINT" \
+        -e GPG_PASSPHRASE="${GPG_PASSPHRASE:-}" \
+        -e USE_CONTAINER=0 \
+        -v "$REPO_ROOT:/sarchy-repo:z" \
+        -w /sarchy-repo \
+        artixlinux/artixlinux:latest \
+        /bin/bash -c "./scripts/smart-build.sh"
+    exit $?
+fi
+
+# ---------------------------------------------------------------------------
 # Auto-detect GPG fingerprint if not provided (for local use; CI sets it via secret)
+# ---------------------------------------------------------------------------
 if [ -z "${GPG_FINGERPRINT:-}" ]; then
     GPG_FINGERPRINT="$(gpg --list-secret-keys --with-colons 2>/dev/null | awk -F: '/^fpr:/ {print $10; exit}')"
     export GPG_FINGERPRINT
@@ -18,7 +64,10 @@ if [ -z "$GPG_FINGERPRINT" ]; then
     exit 1
 fi
 
-# Determine sudo prefix: root (CI container) uses builder user; local (non-root) runs as current user
+# ---------------------------------------------------------------------------
+# Determine sudo prefix: root (CI container) uses builder user;
+# local (non-root) runs as current user
+# ---------------------------------------------------------------------------
 if [ "$(id -u)" = "0" ]; then
     # Running as root inside CI container — makepkg refuses to run as root
     if ! id -u builder >/dev/null 2>&1; then
@@ -38,7 +87,7 @@ run_makepkg() {
 }
 
 run_git_clone() {
-    $SUDO git clone "$@"
+    $SUDO git clone --depth "$GIT_CLONE_DEPTH" "$@"
 }
 
 run_sed() {
@@ -85,10 +134,10 @@ for pkg_dir in "$REPO_ROOT"/packages/*; do
         continue
     fi
 
-    echo "[FALLBACK] Cloning from $UPSTREAM_GIT..."
+    echo "[FALLBACK] Cloning from $UPSTREAM_GIT (depth $GIT_CLONE_DEPTH)..."
     FALLBACK_DIR="/tmp/fallback-$pkg_name"
     rm -rf "$FALLBACK_DIR"
-    if ! run_git_clone --depth 1 "$UPSTREAM_GIT" "$FALLBACK_DIR"; then
+    if ! run_git_clone "$UPSTREAM_GIT" "$FALLBACK_DIR"; then
         echo "[FAILED] Git clone failed for $pkg_name ($UPSTREAM_GIT)"
         continue
     fi
@@ -114,7 +163,7 @@ if [ -f "$REPO_ROOT/external.repos" ]; then
         echo "=========================================="
         tmp_dir="/tmp/external-$pkg_name"
         rm -rf "$tmp_dir"
-        if ! run_git_clone --depth 1 "$repo_url" "$tmp_dir"; then
+        if ! run_git_clone "$repo_url" "$tmp_dir"; then
             echo "[FAILED] External git clone failed for $pkg_name ($repo_url)"
             continue
         fi
