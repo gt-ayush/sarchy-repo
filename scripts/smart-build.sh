@@ -126,5 +126,5 @@ if [ -f "$REPO_ROOT/external.repos" ]; then
             echo "[FAILED] External build failed for $pkg_name"
         fi
         cd "$REPO_ROOT"
-    done < "$REPO_ROOT/external.repos"
+    done < <(cat "$REPO_ROOT/external.repos" && echo)
 fi
