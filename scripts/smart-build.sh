@@ -88,7 +88,10 @@ for pkg_dir in "$REPO_ROOT"/packages/*; do
     echo "[FALLBACK] Cloning from $UPSTREAM_GIT..."
     FALLBACK_DIR="/tmp/fallback-$pkg_name"
     rm -rf "$FALLBACK_DIR"
-    run_git_clone --depth 1 "$UPSTREAM_GIT" "$FALLBACK_DIR"
+    if ! run_git_clone --depth 1 "$UPSTREAM_GIT" "$FALLBACK_DIR"; then
+        echo "[FAILED] Git clone failed for $pkg_name ($UPSTREAM_GIT)"
+        continue
+    fi
 
     # Auto-strip systemd dependencies from PKGBUILD and skip checksums for live git fallback
     run_sed -i "s/'systemd'//g; s/\"systemd\"//g; s/'libsystemd'//g; s/\"libsystemd\"//g" PKGBUILD
@@ -111,7 +114,10 @@ if [ -f "$REPO_ROOT/external.repos" ]; then
         echo "=========================================="
         tmp_dir="/tmp/external-$pkg_name"
         rm -rf "$tmp_dir"
-        run_git_clone --depth 1 "$repo_url" "$tmp_dir"
+        if ! run_git_clone --depth 1 "$repo_url" "$tmp_dir"; then
+            echo "[FAILED] External git clone failed for $pkg_name ($repo_url)"
+            continue
+        fi
         cd "$tmp_dir"
         if run_makepkg -s --sign --key "$GPG_FINGERPRINT" --noconfirm; then
             echo "[SUCCESS] Built external $pkg_name"
