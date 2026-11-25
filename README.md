@@ -46,6 +46,32 @@ The pipeline runs on:
 - `schedule`: every 12 hours (`0 */12 * * *`)
 - `workflow_dispatch` (manual)
 
+## Local Testing (Docker / Podman)
+
+To test the build locally without polluting your host, run the script inside an
+Artix container — exactly like GitHub Actions:
+
+```bash
+export GPG_FINGERPRINT=0B71295264C552D92247710DBA492ABDFDA5BC4E
+
+# Via docker (or podman — auto-detected)
+USE_CONTAINER=1 ./scripts/smart-build.sh
+```
+
+The script re-executes itself inside `artixlinux/artixlinux:latest` with your
+repository mounted at `/sarchy-repo`. All git clones are shallow (`--depth 1`),
+so only the latest commit is downloaded — faster and smaller.
+
+Without `USE_CONTAINER=1`, the script runs directly on your host as your current
+user (makepkg works fine as non-root locally).
+
+## Shallow Clones
+
+Every `git clone` in `smart-build.sh` uses `--depth 1` — only the latest commit
+is fetched, never the full history. This applies to both:
+- `packages/*` upstream Git fallback builds
+- `external.repos` standalone repo builds
+
 ## Adding a New Package
 
 **Option A — Keep PKGBUILD inside this repo:**
