@@ -24,6 +24,7 @@ jobs:
     steps:
       - name: Initialize Artix Pacman & Install Core Tools
         run: |
+          sed -i '/^\[community\]/,/^$/d' /etc/pacman.conf
           pacman-key --init
           pacman-key --populate artix
           pacman -Syu --noconfirm --needed base-devel git sudo gnupg tar zstd github-cli
@@ -42,14 +43,22 @@ jobs:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_FINGERPRINT: ${{ secrets.GPG_FINGERPRINT }}
         run: |
+          test -n "$GPG_PRIVATE_KEY" || { echo "Missing GPG_PRIVATE_KEY secret"; exit 1; }
+          test -n "$GPG_FINGERPRINT" || { echo "Missing GPG_FINGERPRINT secret"; exit 1; }
+
           useradd -m builder
           echo "builder ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/builder
 
           # Import GPG key & set ultimate trust for root (for repo-add --sign)
+          mkdir -p /root/.gnupg && chmod 700 /root/.gnupg
+          echo "allow-loopback-pinentry" >> /root/.gnupg/gpg-agent.conf
           echo "$GPG_PRIVATE_KEY" | base64 -d | gpg --batch --import
           echo "${GPG_FINGERPRINT}:6:" | gpg --batch --import-ownertrust
 
           # Import GPG key & set ultimate trust for builder (for makepkg --sign)
+          sudo -H -u builder mkdir -p /home/builder/.gnupg
+          sudo -H -u builder chmod 700 /home/builder/.gnupg
+          echo "allow-loopback-pinentry" | sudo -H -u builder tee -a /home/builder/.gnupg/gpg-agent.conf >/dev/null
           echo "$GPG_PRIVATE_KEY" | base64 -d | sudo -H -u builder gpg --batch --import
           echo "${GPG_FINGERPRINT}:6:" | sudo -H -u builder gpg --batch --import-ownertrust
 
@@ -72,13 +81,14 @@ jobs:
           GPG_FINGERPRINT: ${{ secrets.GPG_FINGERPRINT }}
         run: |
           cd output
-          # Verify at least one package exists before running repo-add
           ls -la *.pkg.tar.zst
-          rm -f sarchy-repo.db* sarchy-repo.files*
+          rm -f sarchy-repo.db* sarchy-repo.files* sarchy.gpg
           repo-add --sign --key "$GPG_FINGERPRINT" sarchy-repo.db.tar.gz *.pkg.tar.zst
 
+          # Export public key so ISO builds or users can fetch it directly
+          gpg --armor --export "$GPG_FINGERPRINT" > sarchy.gpg
+
           # Convert symlinks to real files for GitHub Releases compatibility
-          rm -f sarchy-repo.db sarchy-repo.db.sig sarchy-repo.files sarchy-repo.files.sig
           cp sarchy-repo.db.tar.gz sarchy-repo.db
           cp sarchy-repo.db.tar.gz.sig sarchy-repo.db.sig
           cp sarchy-repo.files.tar.gz sarchy-repo.files
@@ -93,5 +103,5 @@ jobs:
           else
             gh release create repo output/* \
               --title "Sarchy Linux Official Repository" \
-              --notes "Automated OpenRC-compatible package repository for Sarchy Linux."
+              --notes "Automated Runit-compatible package repository for Sarchy Linux."
           fi
